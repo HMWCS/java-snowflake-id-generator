@@ -6,7 +6,7 @@ This Java implementation of the Snowflake ID algorithm generates unique 64-bit I
 
 - **Distributed Unique ID Generation**: Generates unique IDs using data center and machine IDs, ensuring no duplicates across distributed systems.
 - **Custom Epoch Support**: Allows setting a custom epoch start time.
-- **Optimized Performance**: High throughput achieved through efficient synchronization using Compare-And-Swap (CAS), minimizing contention and ensuring fast, reliable concurrent ID generation.
+- **Optimized Performance**: Compare-And-Swap (CAS) updates a packed `AtomicLong` containing the timestamp and sequence, avoiding per-attempt state-object allocation.
 
 ## Strategies
 
@@ -56,7 +56,7 @@ mvn clean install
 
 ## Running Tests
 
-Run unit tests to verify ID generation and performance:
+Run deterministic boundary tests and an eight-thread uniqueness test (200,000 IDs total):
 
 ```bash
 mvn test
@@ -70,11 +70,34 @@ To use this library in your project, add the following to your `pom.xml`:
 <dependency>
     <groupId>com.hmwcs</groupId>
     <artifactId>hmwcs-snowflake</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 </dependency>
 ```
 
-### Test Results (M1 Pro Chip)
+The tests check ID fields, sequence rollover, the 50 ms clock rollback boundary,
+and propagation of worker failures through `Future.get()`. Throughput measurements
+are separate from correctness tests because collecting every ID adds allocation
+and collection overhead.
+
+Build and verify the binary, source, and Javadoc JARs with Java 21:
+
+```bash
+mvn clean verify
+```
+
+## Releases
+
+GitHub Actions verifies pushes to `main`. When the version in `pom.xml` has no
+existing release or tag, it creates the corresponding `v` tag and GitHub Release
+at the tested commit, attaching the three JARs and SHA-256 checksums. Bump the
+version in `pom.xml` and this README before publishing the next release.
+Existing releases are not overwritten. Maven Central publication is not configured;
+the dependency example above assumes installation into your local Maven repository.
+
+### Historical Test Results (v1.0.0, M1 Pro Chip)
+
+These are historical measurements, not a benchmark of v1.0.1; the old concurrent
+test did not propagate worker failures and is not proof of uniqueness.
 
 ```
 Single-threaded: 

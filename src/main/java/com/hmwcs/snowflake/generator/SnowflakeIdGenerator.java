@@ -3,7 +3,9 @@ package com.hmwcs.snowflake.generator;
 import com.hmwcs.snowflake.exception.ClockMovedBackwardsException;
 
 import java.time.Instant;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongSupplier;
 
 import static com.hmwcs.snowflake.config.SnowflakeConfig.*;
 
@@ -16,7 +18,7 @@ import static com.hmwcs.snowflake.config.SnowflakeConfig.*;
  *
  * <ul>
  * <li>64 bits total:</li>
- * <li>Sign Bit (1 bit): Reserved for the sign (1 bit), ensuring the ID fits in a 64-bit unsigned integer.</li>
+ * <li>Sign Bit (1 bit): Reserved for the sign, keeping the ID non-negative within the timestamp range.</li>
  * <li>Timestamp (41 bits): Represents the time in milliseconds since a custom epoch.</li>
  * <li>Data Center ID (5 bits): Identifies the data center.</li>
  * <li>Machine ID (5 bits): Identifies the specific machine within the data center.</li>
@@ -33,11 +35,11 @@ public class SnowflakeIdGenerator {
     private final int machineId; // ID of the machine
     private final long epoch; // The epoch used for ID generation
 
-    private record State(long timestamp, int sequence) {
-    }
+    private final LongSupplier clock;
 
-    // Atomic reference to the current state
-    private final AtomicReference<State> atomicState = new AtomicReference<>(new State(-1L, 0));
+    // Unix milliseconds in the upper bits, sequence in the lowest 12 bits.
+    // Arithmetic right shift preserves the initial timestamp sentinel of -1.
+    private final AtomicLong atomicState = new AtomicLong(-1L << SEQUENCE_BITS);
 
     /**
      * Constructor to initialize the Snowflake ID generator with default epoch.
@@ -59,6 +61,12 @@ public class SnowflakeIdGenerator {
      * @throws IllegalArgumentException if the dataCenterId or machineId is out of range
      */
     public SnowflakeIdGenerator(int dataCenterId, int machineId, long customEpoch) {
+        this(dataCenterId, machineId, customEpoch, () -> Instant.now().toEpochMilli());
+    }
+
+    // Package-private clock injection keeps boundary tests deterministic.
+    SnowflakeIdGenerator(int dataCenterId, int machineId, long customEpoch, LongSupplier clock) {
+        this.clock = Objects.requireNonNull(clock, "clock");
         if (customEpoch > currentTimeMillis())
             throw new IllegalArgumentException("Custom epoch cannot be in the future");
         if (customEpoch < 0)
@@ -83,9 +91,9 @@ public class SnowflakeIdGenerator {
      */
     public long nextId() {
         while (true) {
-            State currentState = atomicState.get();
-            long lastTimestamp = currentState.timestamp;
-            int sequence = currentState.sequence;
+            long currentState = atomicState.get();
+            long lastTimestamp = currentState >> SEQUENCE_BITS;
+            int sequence = (int) (currentState & SEQUENCE_MASK);
 
             long timestamp = currentTimeMillis();
             checkClockTolerance(lastTimestamp, timestamp);
@@ -95,7 +103,7 @@ public class SnowflakeIdGenerator {
                 sequence = (sequence + 1) & SEQUENCE_MASK;
                 if (sequence == 0) timestamp = waitNextMillis(timestamp);
             } else sequence = 0;
-            State newState = new State(timestamp, sequence);
+            long newState = (timestamp << SEQUENCE_BITS) | sequence;
 
             if (atomicState.compareAndSet(currentState, newState))
                 return generateId(timestamp, sequence);
@@ -129,7 +137,7 @@ public class SnowflakeIdGenerator {
      * @return Current time in milliseconds since Unix epoch
      */
     private long currentTimeMillis() {
-        return Instant.now().toEpochMilli();
+        return clock.getAsLong();
     }
 
     /**
@@ -144,7 +152,7 @@ public class SnowflakeIdGenerator {
         do {
             Thread.onSpinWait();
             timestamp = currentTimeMillis();
-            checkClockTolerance(lastTimestamp, currentTimeMillis());
+            checkClockTolerance(lastTimestamp, timestamp);
         } while (timestamp <= lastTimestamp);
 
         return timestamp;

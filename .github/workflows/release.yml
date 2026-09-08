@@ -1,0 +1,49 @@
+name: Verify and release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Test and package
+        run: mvn -B -ntp clean verify
+      - name: Publish new version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version=$(python3 -c 'import xml.etree.ElementTree as ET; print(ET.parse("pom.xml").getroot().find("{http://maven.apache.org/POM/4.0.0}version").text)')
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Not a release version: $version"; exit 0; }
+          tag="v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; verification complete."
+            exit 0
+          fi
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            echo "::error::Tag $tag already exists without a release; inspect it before publishing."
+            exit 1
+          fi
+          (cd target && sha256sum hmwcs-snowflake-"$version"*.jar > SHA256SUMS)
+          gh release create "$tag" target/hmwcs-snowflake-"$version"*.jar target/SHA256SUMS \
+            --target "$GITHUB_SHA" --title "Version $version" --generate-notes
