@@ -10,7 +10,7 @@ This Java implementation of the Snowflake ID algorithm generates unique 64-bit I
 
 ## Strategies
 
-- **Clock Backward Handling**: The program requires monotonically increasing timestamps to ensure ID uniqueness. If a clock rollback occurs (e.g., due to NTP), a 50 ms tolerance is allowed; if the rollback exceeds this, an exception is thrown. Otherwise, the program waits until the timestamp catches up to or exceeds the last recorded value.
+- **Clock Backward Handling**: The program requires monotonically increasing timestamps to ensure ID uniqueness. If a clock rollback occurs (e.g., due to NTP), a 50 ms tolerance is allowed. Within this tolerance, the generator uses the last recorded timestamp and continues incrementing the sequence; if the rollback exceeds 50 ms, an exception is thrown.
 - **Sequence Overflow Handling**: For sequence overflow within a single millisecond, the strategy is to wait for the next timestamp.
 
 ## ID Structure
