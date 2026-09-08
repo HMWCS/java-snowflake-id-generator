@@ -15,13 +15,13 @@ This Java implementation of the Snowflake ID algorithm generates unique 64-bit I
 
 ## ID Structure
 
-| Component      | Bits  | Description                                             |
-|----------------|-------|---------------------------------------------------------|
-| Sign Bit       | 1     | Reserved for the sign (ensuring a positive ID).         |
-| Timestamp      | 41    | Time in milliseconds since custom epoch.                |
-| Data Center ID | 5     | Identifies the data center (0-31).                      |
-| Machine ID     | 5     | Identifies the machine within the data center (0-31).   |
-| Sequence       | 12    | Counter for IDs generated within the same millisecond.  |
+| Component      | Bits | Description                                            |
+|----------------|------|--------------------------------------------------------|
+| Sign Bit       | 1    | Reserved for the sign (ensuring a positive ID).        |
+| Timestamp      | 41   | Time in milliseconds since custom epoch.               |
+| Data Center ID | 5    | Identifies the data center (0-31).                     |
+| Machine ID     | 5    | Identifies the machine within the data center (0-31).  |
+| Sequence       | 12   | Counter for IDs generated within the same millisecond. |
 
 ## Configuration
 
@@ -48,10 +48,20 @@ System.out.println("Generated ID: " + uniqueId);
 
 ## Installation
 
-To install this library to your local Maven repository:
+This artifact is not currently published to Maven Central. Install it to your local Maven repository first:
 
 ```bash
 mvn clean install
+```
+
+Then add the dependency to your project's `pom.xml`:
+
+```xml
+<dependency>
+    <groupId>com.hmwcs</groupId>
+    <artifactId>hmwcs-snowflake</artifactId>
+    <version>1.0.1</version>
+</dependency>
 ```
 
 ## Running Tests
@@ -62,22 +72,7 @@ Run deterministic boundary tests and an eight-thread uniqueness test (200,000 ID
 mvn test
 ```
 
-## Maven Dependency
-
-To use this library in your project, add the following to your `pom.xml`:
-
-```xml
-<dependency>
-    <groupId>com.hmwcs</groupId>
-    <artifactId>hmwcs-snowflake</artifactId>
-    <version>1.0.1</version>
-</dependency>
-```
-
-The tests check ID fields, sequence rollover, the 50 ms clock rollback boundary,
-and propagation of worker failures through `Future.get()`. Throughput measurements
-are separate from correctness tests because collecting every ID adds allocation
-and collection overhead.
+The tests check ID fields, sequence rollover, the 50 ms clock rollback boundary, and propagation of worker failures through `Future.get()`. Throughput measurements are separate from correctness tests because collecting every ID adds allocation and collection overhead.
 
 Build and verify the binary, source, and Javadoc JARs with Java 21:
 
@@ -85,27 +80,17 @@ Build and verify the binary, source, and Javadoc JARs with Java 21:
 mvn clean verify
 ```
 
-## Releases
-
-GitHub Actions verifies pushes to `main`. When the version in `pom.xml` has no
-existing release or tag, it creates the corresponding `v` tag and GitHub Release
-at the tested commit, attaching the three JARs and SHA-256 checksums. Bump the
-version in `pom.xml` and this README before publishing the next release.
-Existing releases are not overwritten. Maven Central publication is not configured;
-the dependency example above assumes installation into your local Maven repository.
-
 ### Historical Test Results (v1.0.0, M1 Pro Chip)
 
-These are historical measurements, not a benchmark of v1.0.1; the old concurrent
-test did not propagate worker failures and is not proof of uniqueness.
+These are historical measurements, not a benchmark of v1.0.1; the old concurrent test did not propagate worker failures and is not proof of uniqueness.
 
-```
-Single-threaded: 
-Generated 50,000,000 unique IDs in 45.12 seconds.  
+```text
+Single-threaded:
+Generated 50,000,000 unique IDs in 45.12 seconds.
 Throughput: 1,108,074.52 IDs/second
 
-Multi-threaded: 
-Generated 50,000,000 unique IDs concurrently in 21.30 seconds.  
+Multi-threaded:
+Generated 50,000,000 unique IDs concurrently in 21.30 seconds.
 Throughput: 2,347,386.96 IDs/second
 ```
 
